@@ -2,6 +2,7 @@ package queue
 
 import (
 	"context"
+	log "github.com/sirupsen/logrus"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -65,6 +66,7 @@ func (queue *queue) Consume(ctx context.Context) (<-chan Delivery, error) {
 		for {
 			select {
 			case delivery := <-deliveries:
+				log.WithField("Queue Name: ", queue.name).Info("Consuming message")
 				out <- Delivery{delivery.Body, delivery}
 			case <-ctx.Done():
 				close(out)
@@ -83,6 +85,8 @@ func (queue *queue) Publish(ctx context.Context, msg []byte) error {
 		Body:            msg,
 		ContentEncoding: "application/json",
 	}
+
+	log.WithField("Queue Name: ", queue.name).Info("Publishing message")
 
 	return queue.channel.PublishWithContext(ctx, "", queue.name, true, false, data)
 }
