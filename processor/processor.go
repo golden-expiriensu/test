@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"fmt"
 
 	"arkis_test/queue"
 
@@ -39,7 +40,7 @@ func (p Processor) Run(ctx context.Context) error {
 			return ctx.Err()
 		case delivery := <-deliveries:
 			if err := p.process(ctx, delivery); err != nil {
-				return err
+				return fmt.Errorf("process delivery: %w", err)
 			}
 		}
 	}
@@ -50,7 +51,7 @@ func (p Processor) process(ctx context.Context, delivery queue.Delivery) error {
 
 	data, err := p.database.Get(delivery.Body)
 	if err != nil {
-		return err
+		return fmt.Errorf("get data: %w", err)
 	}
 
 	log.WithField("result", data).Info("Processed the delivery")

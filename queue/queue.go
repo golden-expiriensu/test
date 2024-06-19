@@ -2,6 +2,7 @@ package queue
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -21,12 +22,12 @@ type Queue struct {
 func New(connectionURL, queueName string) (*Queue, error) {
 	conn, err := amqp.Dial(connectionURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dial: %w", err)
 	}
 
 	ch, err := conn.Channel()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open channel: %w", err)
 	}
 
 	_, err = ch.QueueDeclare(
@@ -38,7 +39,7 @@ func New(connectionURL, queueName string) (*Queue, error) {
 		nil,       // arguments
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("declare queue: %w", err)
 	}
 
 	return &Queue{conn, ch, queueName}, nil
@@ -56,7 +57,7 @@ func (queue *Queue) Consume(ctx context.Context) (<-chan Delivery, error) {
 		nil,   // args
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("retrieved queued messages: %w", err)
 	}
 
 	out := make(chan Delivery)
