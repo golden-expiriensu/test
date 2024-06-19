@@ -2,6 +2,7 @@ package queue
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -12,21 +13,21 @@ type Delivery struct {
 	handler amqp.Delivery
 }
 
-type queue struct {
+type Queue struct {
 	amqpConnection *amqp.Connection
 	channel        *amqp.Channel
 	name           string
 }
 
-func New(connectionURL, queueName string) (*queue, error) {
+func New(connectionURL, queueName string) (*Queue, error) {
 	conn, err := amqp.Dial(connectionURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dial: %w", err)
 	}
 
 	ch, err := conn.Channel()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open channel: %w", err)
 	}
 
 	_, err = ch.QueueDeclare(
@@ -38,13 +39,13 @@ func New(connectionURL, queueName string) (*queue, error) {
 		nil,       // arguments
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("declare queue: %w", err)
 	}
 
-	return &queue{conn, ch, queueName}, nil
+	return &Queue{conn, ch, queueName}, nil
 }
 
-func (queue *queue) Consume(ctx context.Context) (<-chan Delivery, error) {
+func (queue *Queue) Consume(ctx context.Context) (<-chan Delivery, error) {
 	deliveries, err := queue.channel.ConsumeWithContext(
 		ctx,
 		queue.name,
@@ -56,7 +57,7 @@ func (queue *queue) Consume(ctx context.Context) (<-chan Delivery, error) {
 		nil,   // args
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("retrieved queued messages: %w", err)
 	}
 
 	out := make(chan Delivery)
@@ -76,7 +77,7 @@ func (queue *queue) Consume(ctx context.Context) (<-chan Delivery, error) {
 	return out, nil
 }
 
-func (queue *queue) Publish(ctx context.Context, msg []byte) error {
+func (queue *Queue) Publish(ctx context.Context, msg []byte) error {
 	data := amqp.Publishing{
 		DeliveryMode:    amqp.Transient,
 		Timestamp:       time.Now(),
