@@ -1,11 +1,12 @@
 package main
 
 import (
+	"context"
+	"os"
+
 	"arkis_test/database"
 	"arkis_test/processor"
 	"arkis_test/queue"
-	"context"
-	"os"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -25,5 +26,8 @@ func main() {
 
 	log.Info("Application is ready to run")
 
-	processor.New(inputQueue, outputQueue, database.D{}).Run(ctx)
+	err = processor.New(inputQueue, outputQueue, database.D{}).Run(ctx)
+	if err != nil {
+		log.WithError(err).Error("Running processor")
+	}
 }

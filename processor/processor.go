@@ -1,8 +1,9 @@
 package processor
 
 import (
-	"arkis_test/queue"
 	"context"
+
+	"arkis_test/queue"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -16,17 +17,17 @@ type Database interface {
 	Get([]byte) (string, error)
 }
 
-type processor struct {
+type Processor struct {
 	input    Queue
 	output   Queue
 	database Database
 }
 
-func New(input, output Queue, db Database) processor {
-	return processor{input, output, db}
+func New(input, output Queue, db Database) Processor {
+	return Processor{input, output, db}
 }
 
-func (p processor) Run(ctx context.Context) error {
+func (p Processor) Run(ctx context.Context) error {
 	deliveries, err := p.input.Consume(ctx)
 	if err != nil {
 		return err
@@ -44,7 +45,7 @@ func (p processor) Run(ctx context.Context) error {
 	}
 }
 
-func (p processor) process(ctx context.Context, delivery queue.Delivery) error {
+func (p Processor) process(ctx context.Context, delivery queue.Delivery) error {
 	log.WithField("delivery", string(delivery.Body)).Info("Processing the delivery")
 
 	data, err := p.database.Get(delivery.Body)
@@ -52,7 +53,7 @@ func (p processor) process(ctx context.Context, delivery queue.Delivery) error {
 		return err
 	}
 
-	log.WithField("result", string(data)).Info("Processed the delivery")
+	log.WithField("result", data).Info("Processed the delivery")
 
 	return p.output.Publish(ctx, []byte(data))
 }
