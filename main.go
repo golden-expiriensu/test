@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"sync"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -19,6 +20,7 @@ type Queue interface {
 }
 
 type QueuePair struct {
+	Name   string
 	Input  Queue
 	Output Queue
 }
@@ -60,9 +62,8 @@ func main() {
 		}(q, i)
 	}
 
-	// Test publish message to input-A
-	if err := queues[0].Input.Publish(ctx, []byte("this is a test")); err != nil {
-		log.WithError(err).Error("Failed to publish test message")
+	if err := publishMessages(ctx, queues); err != nil {
+		log.WithError(err).Error("Failed to publish messages")
 	}
 
 	wg.Wait()
@@ -73,6 +74,43 @@ func main() {
 		}
 		log.Panic("One or more processors encountered an error")
 	}
+}
+
+func publishMessages(ctx context.Context, queues []*QueuePair) error {
+	messages := []struct {
+		input  string
+		output string
+	}{
+		{"hello", `{"result": "hello"}`},
+		{"world", `{"result": "world"}`},
+	}
+
+	for i, msg := range messages {
+		if err := queues[i].Input.Publish(ctx, []byte(msg.input)); err != nil {
+			return fmt.Errorf("failed to publish message to input-%s, error: %s", queues[i].Name, err.Error())
+		}
+	}
+
+	time.Sleep(2 * time.Second)
+
+	for i, q := range queues {
+		deliveries, err := q.Output.Consume(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to consume messages from output-%s, error: %s", queues[i].Name, err.Error())
+		}
+
+		select {
+		case delivery := <-deliveries:
+			expected := messages[i].output
+			if string(delivery.Body) != expected {
+				return fmt.Errorf("unexpected message from output-%s, got: %s, expected: %s", queues[i].Name, delivery.Body, expected)
+			}
+		case <-ctx.Done():
+			return fmt.Errorf("timed out waiting for message from output-%s", queues[i].Name)
+		}
+	}
+
+	return nil
 }
 
 func createQueuePair(rabbitmqURL, queueName string) (*QueuePair, error) {
@@ -87,6 +125,7 @@ func createQueuePair(rabbitmqURL, queueName string) (*QueuePair, error) {
 	}
 
 	return &QueuePair{
+		Name:   queueName,
 		Input:  inputQ,
 		Output: outputQ,
 	}, nil
