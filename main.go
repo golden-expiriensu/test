@@ -25,50 +25,65 @@ type QueuePair struct {
 
 func main() {
 	ctx := context.Background()
-	rabbitmqUrl := viper.GetString("RABBITMQ_URL")
-	var queues []*QueuePair
 
-	queuePairA, err := createQueuePair(rabbitmqUrl, "A")
-	if err != nil {
-		log.WithError(err).Panic(err)
+	rabbitmqURL := viper.GetString("RABBITMQ_URL")
+	if rabbitmqURL == "" {
+		log.Panic("RABBITMQ_URL is not set")
 	}
-	queues = append(queues, queuePairA)
 
-	queuePairB, err := createQueuePair(rabbitmqUrl, "B")
-	if err != nil {
-		log.WithError(err).Panic(err)
+	queueNames := []string{"A", "B"}
+	queues := make([]*QueuePair, len(queueNames))
+
+	for i, name := range queueNames {
+		queuePair, err := createQueuePair(rabbitmqURL, name)
+		if err != nil {
+			log.WithError(err).Panic(err)
+		}
+		queues[i] = queuePair
 	}
-	queues = append(queues, queuePairB)
 
 	log.Info("Application is ready to run")
 
 	wg := sync.WaitGroup{}
 	var errs []error
-	for i := range 2 {
-		log.Infof("Add process %d", i)
+	var mu sync.Mutex
+
+	for i, q := range queues {
 		wg.Add(1)
-		go func(i int) {
-			if err := processor.New(queues[i].Input, queues[i].Output, database.D{}).Run(ctx); err != nil {
-				errs = append(errs, err)
+		go func(q *QueuePair, index int) {
+			defer wg.Done()
+			if err := processor.New(q.Input, q.Output, database.D{}).Run(ctx); err != nil {
+				mu.Lock()
+				errs = append(errs, fmt.Errorf("Processor %d: %v", index, err))
+				mu.Unlock()
 			}
-			wg.Done()
-		}(i)
+		}(q, i)
 	}
 
-	queues[0].Input.Publish(ctx, []byte("this is a test"))
+	// Test publish message to input-A
+	if err := queues[0].Input.Publish(ctx, []byte("this is a test")); err != nil {
+		log.WithError(err).Error("Failed to publish test message")
+	}
 
 	wg.Wait()
+
+	if len(errs) > 0 {
+		for _, err := range errs {
+			log.Error(err)
+		}
+		log.Panic("One or more processors encountered an error")
+	}
 }
 
-func createQueuePair(rabbitmqUrl, queueName string) (*QueuePair, error) {
-	inputQ, err := queue.New(rabbitmqUrl, fmt.Sprintf("input-%s", queueName))
+func createQueuePair(rabbitmqURL, queueName string) (*QueuePair, error) {
+	inputQ, err := queue.New(rabbitmqURL, fmt.Sprintf("input-%s", queueName))
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create input queue A, error: %s", err.Error())
+		return nil, fmt.Errorf("failed to create input queue %s, error: %s", queueName, err.Error())
 	}
 
-	outputQ, err := queue.New(rabbitmqUrl, fmt.Sprintf("output-%s", queueName))
+	outputQ, err := queue.New(rabbitmqURL, fmt.Sprintf("output-%s", queueName))
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create input queue A, error: %s", err.Error())
+		return nil, fmt.Errorf("failed to create output queue %s, error: %s", queueName, err.Error())
 	}
 
 	return &QueuePair{
