@@ -4,6 +4,7 @@ import (
 	"arkis_test/database"
 	"arkis_test/processor"
 	"arkis_test/queue"
+	"arkis_test/types"
 	"context"
 	"flag"
 	"fmt"
@@ -12,17 +13,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
-
-type Queue interface {
-	Consume(ctx context.Context) (<-chan queue.Delivery, error)
-	Publish(ctx context.Context, msg []byte) error
-}
-
-type QueuePair struct {
-	Name   string
-	Input  Queue
-	Output Queue
-}
 
 func main() {
 	ctx := context.Background()
@@ -33,7 +23,7 @@ func main() {
 	}
 
 	queueNames := []string{"A", "B"}
-	queues := make([]*QueuePair, len(queueNames))
+	queues := make([]*types.QueuePair, len(queueNames))
 
 	for i, name := range queueNames {
 		queuePair, err := createQueuePair(rabbitmqURL, name)
@@ -51,7 +41,7 @@ func main() {
 
 	for i, q := range queues {
 		wg.Add(1)
-		go func(q *QueuePair, index int) {
+		go func(q *types.QueuePair, index int) {
 			defer wg.Done()
 			if err := processor.New(q.Input, q.Output, database.D{}).Run(ctx); err != nil {
 				mu.Lock()
@@ -61,14 +51,14 @@ func main() {
 		}(q, i)
 	}
 
-	go func(ctx context.Context, queues []*QueuePair) {
+	go func(ctx context.Context, queues []*types.QueuePair) {
 		if err := publishMessages(ctx, queues); err != nil {
 			log.WithError(err).Error("Failed to publish messages")
 		}
 	}(ctx, queues)
 
 	for _, q := range queues {
-		go func(ctx context.Context, q *QueuePair) {
+		go func(ctx context.Context, q *types.QueuePair) {
 			if err := consumeMessages(ctx, q, func(msg string) error {
 				log.Infof("received msg: %s, for queue: %s", msg, q.Name)
 				return nil
@@ -88,7 +78,7 @@ func main() {
 	}
 }
 
-func consumeMessages(ctx context.Context, queue *QueuePair, callback func(msg string) error) error {
+func consumeMessages(ctx context.Context, queue *types.QueuePair, callback func(msg string) error) error {
 	receivedData, err := queue.Output.Consume(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to consume messages from output-%s, error: %s", queue.Name, err.Error())
@@ -103,7 +93,7 @@ func consumeMessages(ctx context.Context, queue *QueuePair, callback func(msg st
 	}
 }
 
-func publishMessages(ctx context.Context, queues []*QueuePair) error {
+func publishMessages(ctx context.Context, queues []*types.QueuePair) error {
 	messages := []string{"hello", "world"}
 
 	for i, msg := range messages {
@@ -115,7 +105,7 @@ func publishMessages(ctx context.Context, queues []*QueuePair) error {
 	return nil
 }
 
-func createQueuePair(rabbitmqURL, queueName string) (*QueuePair, error) {
+func createQueuePair(rabbitmqURL, queueName string) (*types.QueuePair, error) {
 	inputQ, err := queue.New(rabbitmqURL, fmt.Sprintf("input-%s", queueName))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create input queue %s, error: %s", queueName, err.Error())
@@ -126,7 +116,7 @@ func createQueuePair(rabbitmqURL, queueName string) (*QueuePair, error) {
 		return nil, fmt.Errorf("failed to create output queue %s, error: %s", queueName, err.Error())
 	}
 
-	return &QueuePair{
+	return &types.QueuePair{
 		Name:   queueName,
 		Input:  inputQ,
 		Output: outputQ,
