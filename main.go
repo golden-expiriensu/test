@@ -28,35 +28,17 @@ func main() {
 	rabbitmqUrl := viper.GetString("RABBITMQ_URL")
 	var queues []*QueuePair
 
-	inputQueueA, err := queue.New(rabbitmqUrl, "input-A")
+	queuePairA, err := createQueuePair(rabbitmqUrl, "A")
 	if err != nil {
-		log.WithError(err).Panic("Cannot create input queue A")
+		log.WithError(err).Panic(err)
 	}
+	queues = append(queues, queuePairA)
 
-	outputQueueA, err := queue.New(rabbitmqUrl, "output-A")
+	queuePairB, err := createQueuePair(rabbitmqUrl, "B")
 	if err != nil {
-		log.WithError(err).Panic("Cannot create output queue A")
+		log.WithError(err).Panic(err)
 	}
-
-	queues = append(queues, &QueuePair{
-		Input:  inputQueueA,
-		Output: outputQueueA,
-	})
-
-	inputQueueB, err := queue.New(rabbitmqUrl, "input-A")
-	if err != nil {
-		log.WithError(err).Panic("Cannot create input queue A")
-	}
-
-	outputQueueB, err := queue.New(rabbitmqUrl, "output-A")
-	if err != nil {
-		log.WithError(err).Panic("Cannot create output queue A")
-	}
-
-	queues = append(queues, &QueuePair{
-		Input:  inputQueueB,
-		Output: outputQueueB,
-	})
+	queues = append(queues, queuePairB)
 
 	log.Info("Application is ready to run")
 
@@ -76,6 +58,23 @@ func main() {
 	queues[0].Input.Publish(ctx, []byte("this is a test"))
 
 	wg.Wait()
+}
+
+func createQueuePair(rabbitmqUrl, queueName string) (*QueuePair, error) {
+	inputQ, err := queue.New(rabbitmqUrl, fmt.Sprintf("input-%s", queueName))
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create input queue A, error: %s", err.Error())
+	}
+
+	outputQ, err := queue.New(rabbitmqUrl, fmt.Sprintf("output-%s", queueName))
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create input queue A, error: %s", err.Error())
+	}
+
+	return &QueuePair{
+		Input:  inputQ,
+		Output: outputQ,
+	}, nil
 }
 
 func init() {
