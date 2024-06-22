@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"sync"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -62,8 +61,21 @@ func main() {
 		}(q, i)
 	}
 
-	if err := publishMessages(ctx, queues); err != nil {
-		log.WithError(err).Error("Failed to publish messages")
+	go func(ctx context.Context, queues []*QueuePair) {
+		if err := publishMessages(ctx, queues); err != nil {
+			log.WithError(err).Error("Failed to publish messages")
+		}
+	}(ctx, queues)
+
+	for _, q := range queues {
+		go func(ctx context.Context, q *QueuePair) {
+			if err := consumeMessages(ctx, q, func(msg string) error {
+				log.Infof("received msg: %s, for queue: %s", msg, q.Name)
+				return nil
+			}); err != nil {
+				log.WithError(err).Errorf("Failed to consumer messages for queue %s", q.Name)
+			}
+		}(ctx, q)
 	}
 
 	wg.Wait()
@@ -76,37 +88,27 @@ func main() {
 	}
 }
 
-func publishMessages(ctx context.Context, queues []*QueuePair) error {
-	messages := []struct {
-		input  string
-		output string
-	}{
-		{"hello", `{"result": "hello"}`},
-		{"world", `{"result": "world"}`},
+func consumeMessages(ctx context.Context, queue *QueuePair, callback func(msg string) error) error {
+	receivedData, err := queue.Output.Consume(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to consume messages from output-%s, error: %s", queue.Name, err.Error())
 	}
+
+	select {
+	case delivery := <-receivedData:
+		msg := string(delivery.Body)
+		return callback(msg)
+	case <-ctx.Done():
+		return fmt.Errorf("timed out waiting for message from output-%s", queue.Name)
+	}
+}
+
+func publishMessages(ctx context.Context, queues []*QueuePair) error {
+	messages := []string{"hello", "world"}
 
 	for i, msg := range messages {
-		if err := queues[i].Input.Publish(ctx, []byte(msg.input)); err != nil {
-			return fmt.Errorf("failed to publish message to input-%s, error: %s", queues[i].Name, err.Error())
-		}
-	}
-
-	time.Sleep(2 * time.Second)
-
-	for i, q := range queues {
-		deliveries, err := q.Output.Consume(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to consume messages from output-%s, error: %s", queues[i].Name, err.Error())
-		}
-
-		select {
-		case delivery := <-deliveries:
-			expected := messages[i].output
-			if string(delivery.Body) != expected {
-				return fmt.Errorf("unexpected message from output-%s, got: %s, expected: %s", queues[i].Name, delivery.Body, expected)
-			}
-		case <-ctx.Done():
-			return fmt.Errorf("timed out waiting for message from output-%s", queues[i].Name)
+		if err := queues[i].Input.Publish(ctx, []byte(msg)); err != nil {
+			return fmt.Errorf("failed to publish '%s' to input-%s, error: %s", msg, queues[i].Name, err.Error())
 		}
 	}
 
