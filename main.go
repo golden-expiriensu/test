@@ -68,7 +68,7 @@ func main() {
 
 		go func(ctx context.Context, q *types.QueuePair) {
 			if err := consumeUseCase.ConsumeMessage(ctx, q, func(msg string) error {
-				log.Infof("received msg: %s, for queue: %s", msg, q.Name)
+				log.Infof("Queue: %s has received this message: %s", q.Name, msg)
 				return nil
 			}); err != nil {
 				log.WithError(err).Errorf("Failed to consumer messages for queue %s", q.Name)
