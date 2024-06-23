@@ -1,10 +1,11 @@
 package main
 
 import (
-	"arkis_test/database"
-	"arkis_test/processor"
-	"arkis_test/queue"
 	"arkis_test/types"
+	"arkis_test/usecase/consume"
+	"arkis_test/usecase/general"
+	"arkis_test/usecase/process"
+	"arkis_test/usecase/publish"
 	"context"
 	"flag"
 	"fmt"
@@ -23,10 +24,14 @@ func main() {
 	}
 
 	queueNames := []string{"A", "B"}
+	messages := []string{"hello", "world"}
 	queues := make([]*types.QueuePair, len(queueNames))
-
+	generalUseCase := general.NewGeneralUseCase(rabbitmqURL)
+	publishUseCase := publish.NewPublishUseCase()
+	consumeUseCase := consume.NewConsumeUseCase()
+	processUseCase := process.NewProcessUseCase()
 	for i, name := range queueNames {
-		queuePair, err := createQueuePair(rabbitmqURL, name)
+		queuePair, err := generalUseCase.CreateQueuePair(name)
 		if err != nil {
 			log.WithError(err).Panic(err)
 		}
@@ -34,6 +39,7 @@ func main() {
 	}
 
 	log.Info("Application is ready to run")
+	log.Info("Waiting for messages...")
 
 	wg := sync.WaitGroup{}
 	var errs []error
@@ -43,7 +49,7 @@ func main() {
 		wg.Add(1)
 		go func(q *types.QueuePair, index int) {
 			defer wg.Done()
-			if err := processor.New(q.Input, q.Output, database.D{}).Run(ctx); err != nil {
+			if err := processUseCase.StartQueueProcess(ctx, q); err != nil {
 				mu.Lock()
 				errs = append(errs, fmt.Errorf("Processor %d: %v", index, err))
 				mu.Unlock()
@@ -51,15 +57,17 @@ func main() {
 		}(q, i)
 	}
 
-	go func(ctx context.Context, queues []*types.QueuePair) {
-		if err := publishMessages(ctx, queues); err != nil {
-			log.WithError(err).Error("Failed to publish messages")
-		}
-	}(ctx, queues)
+	for i, q := range queues {
 
-	for _, q := range queues {
+		msg := messages[i]
+		go func(ctx context.Context, q *types.QueuePair, msg string) {
+			if err := publishUseCase.PublishMessage(ctx, q, msg); err != nil {
+				log.WithError(err).Errorf("Failed to publish message: %s, for queue: %s", msg, q.Name)
+			}
+		}(ctx, q, msg)
+
 		go func(ctx context.Context, q *types.QueuePair) {
-			if err := consumeMessages(ctx, q, func(msg string) error {
+			if err := consumeUseCase.ConsumeMessage(ctx, q, func(msg string) error {
 				log.Infof("received msg: %s, for queue: %s", msg, q.Name)
 				return nil
 			}); err != nil {
@@ -76,51 +84,6 @@ func main() {
 		}
 		log.Panic("One or more processors encountered an error")
 	}
-}
-
-func consumeMessages(ctx context.Context, queue *types.QueuePair, callback func(msg string) error) error {
-	receivedData, err := queue.Output.Consume(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to consume messages from output-%s, error: %s", queue.Name, err.Error())
-	}
-
-	select {
-	case delivery := <-receivedData:
-		msg := string(delivery.Body)
-		return callback(msg)
-	case <-ctx.Done():
-		return fmt.Errorf("timed out waiting for message from output-%s", queue.Name)
-	}
-}
-
-func publishMessages(ctx context.Context, queues []*types.QueuePair) error {
-	messages := []string{"hello", "world"}
-
-	for i, msg := range messages {
-		if err := queues[i].Input.Publish(ctx, []byte(msg)); err != nil {
-			return fmt.Errorf("failed to publish '%s' to input-%s, error: %s", msg, queues[i].Name, err.Error())
-		}
-	}
-
-	return nil
-}
-
-func createQueuePair(rabbitmqURL, queueName string) (*types.QueuePair, error) {
-	inputQ, err := queue.New(rabbitmqURL, fmt.Sprintf("input-%s", queueName))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create input queue %s, error: %s", queueName, err.Error())
-	}
-
-	outputQ, err := queue.New(rabbitmqURL, fmt.Sprintf("output-%s", queueName))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create output queue %s, error: %s", queueName, err.Error())
-	}
-
-	return &types.QueuePair{
-		Name:   queueName,
-		Input:  inputQ,
-		Output: outputQ,
-	}, nil
 }
 
 func init() {
