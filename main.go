@@ -51,7 +51,7 @@ func main() {
 			defer wg.Done()
 			if err := processUseCase.StartQueueProcess(ctx, q); err != nil {
 				mu.Lock()
-				errs = append(errs, fmt.Errorf("Processor %d: %v", index, err))
+				errs = append(errs, fmt.Errorf("Processor %d failed, error: %v", index, err))
 				mu.Unlock()
 			}
 		}(q, i)
