@@ -20,8 +20,7 @@ func (c *ConsumeUseCase) ConsumeMessage(ctx context.Context, queue *types.QueueP
 
 	select {
 	case delivery := <-receivedData:
-		msg := delivery.Body
-		return callback(msg)
+		return callback(delivery.Body)
 	case <-ctx.Done():
 		return fmt.Errorf("timed out waiting for message from output-%s", queue.Name)
 	}
