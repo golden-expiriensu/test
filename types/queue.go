@@ -1,17 +1,9 @@
 package types
 
-import (
-	"arkis_test/queue"
-	"context"
-)
-
-type Queue interface {
-	Consume(ctx context.Context) (<-chan queue.Delivery, error)
-	Publish(ctx context.Context, msg []byte) error
-}
+import "arkis_test/processor"
 
 type QueuePair struct {
 	Name   string
-	Input  Queue
-	Output Queue
+	Input  processor.Queue
+	Output processor.Queue
 }
