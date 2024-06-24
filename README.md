@@ -29,3 +29,28 @@ Add support for the second stream of data using `input-B` and `output-B` queues.
 ### Black box
 1. Client publishes 'hello' to `input-A` and receives '{"result": "hello"}' from `output-A`.
 2. Client publishes 'hello' to `input-B` and receives '{"result": "hello"}' from `output-B`.
+
+
+### Testing
+## Run in a terminal
+`make`
+
+## Publishing
+Open your web browser at http://localhost:15672/.
+Use: username guest and password guest.
+Click on the "Queues" tab to view all queues.
+Locate the input-A queue and click on its name to open its details.
+Go to "Publish message" section.
+In the "Payload" field, type helloA and click the "Publish message" button.
+Do the same for the input-B queue using helloB in the payload.
+
+## Consuming
+Go back to the "Queues" tab.
+Find the output-A queue and click on its name to open its details.
+Go to "Get messages" section.
+Click the "Get Message(s)" button to retrieve messages from the queue.
+Do the same for the output-B queue.
+
+## Test resut
+Queue input-A, the message in output-A should be {"result": "helloA"}.
+Queue input-B, the message in output-B should be {"result": "helloB"}.

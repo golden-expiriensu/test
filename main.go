@@ -13,17 +13,27 @@ import (
 func main() {
 	ctx := context.Background()
 
-	inputQueue, err := queue.New(os.Getenv("RABBITMQ_URL"), "input-A")
-	if err != nil {
-		log.WithError(err).Panic("Cannot create input queue")
+	inputQueues := []string{"input-A", "input-B"}
+	outputQueues := []string{"output-A", "output-B"}
+
+	for i, inputQueueName := range inputQueues {
+		outputQueueName := outputQueues[i]
+
+		inputQueue, err := queue.New(os.Getenv("RABBITMQ_URL"), inputQueueName)
+		if err != nil {
+			log.WithError(err).Panicf("Cannot create input queue %s", inputQueueName)
+		}
+
+		outputQueue, err := queue.New(os.Getenv("RABBITMQ_URL"), outputQueueName)
+		if err != nil {
+			log.WithError(err).Panicf("Cannot create output queue %s", outputQueueName)
+		}
+
+		log.Infof("Application is ready to run for %s -> %s", inputQueueName, outputQueueName)
+
+		go processor.New(inputQueue, outputQueue, database.D{}).Run(ctx)
 	}
 
-	outputQueue, err := queue.New(os.Getenv("RABBITMQ_URL"), "output-A")
-	if err != nil {
-		log.WithError(err).Panic("Cannot create output queue")
-	}
-
-	log.Info("Application is ready to run")
-
-	processor.New(inputQueue, outputQueue, database.D{}).Run(ctx)
+	// Block forever
+	select {}
 }
