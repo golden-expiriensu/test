@@ -10,5 +10,5 @@ run-rabbitmq:
 	docker run -d --rm --name rabbitmq-test -p 5672:5672 -p 15672:15672 rabbitmq:management
 
 # run rabbitmq before start testing
-test:	remove-rabbitmq		run-rabbitmq
+test:
 	go clean -testcache && go test ./... -cover -v
