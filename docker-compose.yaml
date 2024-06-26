@@ -1,6 +1,7 @@
 services:
   rabbitmq:
     image: rabbitmq:management
+    container_name: ${RABBITMQ_CONTAINER_NAME:-rabbitmq}
     ports:
       - 5672:5672
       - 15672:15672
@@ -14,10 +15,11 @@ services:
       retries: 10
 
   service:
+    container_name: ${APP_CONTAINER_NAME:-app}
     build:
       dockerfile: Dockerfile
     environment:
-      RABBITMQ_URL: amqp://rabbitmq:5672
+      RABBITMQ_URL: ${RABBITMQ_URL}
     networks:
       - rabbit_net
     depends_on:

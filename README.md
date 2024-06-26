@@ -19,7 +19,13 @@ make lint
 ### Run
 Bootstrap RabbitMQ, run the service and start processing messages received from the queue.
 ```bash
-make
+run app --> make
+
+test app --> make test
+
+Note: before running the app, make sure you have rabbitmq on your system.
+if you don't, then simply run >> make run-rabbitmq<<
+
 ```
 
 ## Objective

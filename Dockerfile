@@ -1,6 +1,6 @@
-FROM golang:1.22 AS builder
+FROM golang:1.22.4-bookworm AS builder
 
-WORKDIR app
+WORKDIR /app
 
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/gomod-cache \
