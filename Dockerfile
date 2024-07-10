@@ -1,14 +1,16 @@
 FROM golang:1.22 AS builder
 
-WORKDIR app
+WORKDIR /app
 
 COPY go.mod go.sum ./
-RUN --mount=type=cache,target=/gomod-cache \
-    go mod download
+RUN go mod download && go mod verify
 
-COPY . ./
-RUN --mount=type=cache,target=/gomod-cache \
-    --mount=type=cache,target=/go-cache \
-    go build -o /main
+COPY . .
 
-CMD ["/main"]
+RUN make build-for-docker
+
+FROM alpine:3.20
+
+COPY --from=builder /streams-server /streams-server
+
+ENTRYPOINT ["/streams-server"]

@@ -16,6 +16,13 @@ services:
   service:
     build:
       dockerfile: Dockerfile
+    ports:
+      - 8080:8080
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     environment:
       RABBITMQ_URL: amqp://rabbitmq:5672
     networks:
